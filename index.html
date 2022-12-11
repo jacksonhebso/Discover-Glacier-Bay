@@ -1,0 +1,454 @@
+<html dir='ltr' lang='en'>
+<head>
+
+  <base href="/">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0">
+  <title>Glacier Bay National Park</title>
+  <!-- Include CARTO VL JS from the CARTO CDN-->
+  <script src="https://libs.cartocdn.com/carto-vl/v1.4.4/carto-vl.min.js"></script>
+  <link href="https://carto.com/developers/carto-vl/v1.4.4/examples/maps/style.css" rel="stylesheet">
+  <!-- Airship -->
+  <link rel="stylesheet" href="https://libs.cartocdn.com/airship-style/v2.4.1/airship.css">
+  <script type="module" src="https://libs.cartocdn.com/airship-components/v2.4.1/airship/airship.esm.js"></script>
+  <script nomodule="" src="https://libs.cartocdn.com/airship-components/v2.4.1/airship/airship.js"></script>
+  <!-- Include Mapbox GL JS -->
+  <script src="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.js"></script>
+  <!-- Include Mapbox GL CSS -->
+  <link href="https://libs.cartocdn.com/mapbox-gl/v0.48.0-carto1/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.tiles.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script>
+  <!-- Include Mapbox GL Draw -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.2.0/mapbox-gl-draw.css" type="text/css" />
+
+</head>
+  <body class="as-app-body as-app">
+    <as-responsive-content>
+      <aside class="as-sidebar as-sidebar--left" data-name="Tools" data-tab-order="2">
+       <div class="as-container">
+        <section class="as-box">
+          <h1 class="as-title">Discover Glacier Bay</h1>
+          <p class="as-body">
+            Covering 3.3 million acres of rugged mountains, dynamic glaciers, temperate rainforest, wild coastlines and deep sheltered fjords, Glacier Bay National Park is a highlight of Alaska's Inside Passage and part of a 25-million acre World Heritage Site—one of the world’s largest international protected areas. From sea to summit, Glacier Bay offers limitless opportunities for adventure and inspiration.
+          </p>
+          <a href="https://www.nps.gov/glba/index.htm" target="blank" class="as-btn as-btn--primary">Visit NPS.gov</a>
+        </section>
+		   <section class="as-box">
+          <h1 class="as-title">Draw Feature Tools</h1>
+          <p class="as-body">
+            Use the draw feature tools located in the bottom right to enrich the current map with new point and polygon features.</p>
+       </section>
+        <section class="as-box">
+          <h1 class="as-title">Wildlife View Tool</h1>
+          <p class="as-body">
+            Select the wildlife layer to draw
+          <div id="controls">
+          <ul class="actions">
+            <li>
+              <input type="radio" name="source" onclick="setALLlayer()" id="all" checked>
+              <label for="all">All</label>
+            </li>
+            <li>
+              <input type="radio" name="source" onclick="setBearlayer()" id="bear">
+              <label for="bear">Bear</label>
+            </li>
+            <li>
+              <input type="radio" name="source" onclick="setBirdlayer()" id="bird">
+              <label for="bird">Bird</label>
+            </li>
+            <li>
+              <input type="radio" name="source" onclick="setSeallayer()" id="seal">
+              <label for="seal">Seal</label>
+            </li>
+          </ul>
+		 </section>
+        <section class="as-box">
+          <h1 class="as-title">Identify Glacier Tool</h1>
+          <p class="as-body">
+          Move the mouse over the glacier polygons
+          <div id="controls">
+            <div id="content"></div>
+          </div>
+        </section>
+    </aside>
+
+
+    <main class='as-main' data-tab-order="0"></main>
+        <div class="as-map-area" id="map"></div>
+
+      <aside class="toolbox">
+        <div class="box">
+            <header>
+                <h1>Mountain Height in Meters</h1>
+            </header>
+            <as-histogram-widget />
+            <footer class="js-footer"></footer>
+        </div>
+      </aside>
+
+
+  <div id="loader">
+    <div class="CDB-LoaderIcon CDB-LoaderIcon--big">
+      <svg class="CDB-LoaderIcon-spinner" viewBox="0 0 50 50">
+        <circle class="CDB-LoaderIcon-path" cx="25" cy="25" r="20" fill="none"></circle>
+      </svg>
+    </div>
+  </as-responsive-content>
+
+  <script>
+
+   const s = carto.expressions;
+   mapboxgl.accessToken = 'pk.eyJ1Ijoibmlra2lqYWNrc29uMDUiLCJhIjoiY2pyODA4dHMwMDE1YjQ0cGlvMHR6NjJjbyJ9.5VA7gHXrx6QKOKovbb9LsQ'
+    //add map
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/navigation-guidance-day-v4',
+      center: [-136.38, 58.86],
+      zoom: 8.2,
+      dragPan: true,
+      dragRotate: true
+    });
+
+    //add navigation controls
+    const nav = new mapboxgl.NavigationControl({
+      showCompass: false
+    });
+    map.addControl(nav, 'bottom-right');
+    map.addControl(new mapboxgl.FullscreenControl(), 'bottom-right');
+
+    // Log some basic map events
+    const events = ['mousedown', 'click', 'mousemove', 'mouseup', 'dragstart', 'dragend', 'movestart', 'moveend'];
+    events.forEach((eventName) => {
+      map.on(eventName, () => {
+        console.log(`map:${eventName}`);
+      });
+    });
+
+    // Define pop-up
+    const popup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false
+    });
+
+    // Define user
+    carto.setDefaultAuth({
+      username: 'jacksonhebso',
+      apiKey: 'eb86641d237ff03527623bfb7c04809b65fa7ab2'
+    });
+
+
+  // Define layers
+  const source = new carto.source.Dataset('glaciers_gbnp');
+	const viz = new carto.Viz(`
+        width: 4
+        strokeWidth: 0.5
+        strokeColor: #a2b5d7
+        color: rgba(31,1847,228,0.15)
+        @glac_name: $glac_name
+      `);
+      const layer = new carto.Layer('layer', source, viz);
+
+  const peakSource = new carto.source.Dataset('mountainpkst');
+	const peakViz = new carto.Viz(`
+    @histogram: viewportHistogram($elev_meter, 10)
+    @name: $name
+    @elevation: $elev_meter
+    width: 12
+		color: #71590a
+		strokeColor: #ffffff
+		strokeWidth: 1
+		symbol: triangle
+
+	`);
+    const peakLayer = new carto.Layer('peakLayer', peakSource, peakViz);
+
+	const lodgeSource = new carto.source.Dataset('lodging');
+	const lodgeViz = new carto.Viz(`
+    @name: $name
+    @website: $website
+		width: 12
+		color: #7e7b73
+		strokeColor: #ffffff
+		strokeWidth: 1
+		symbol: image('https://s3.amazonaws.com/com.cartodb.users-assets.production/maki-icons/building-18.svg')
+	`);
+    const lodgeLayer = new carto.Layer('lodgeLayer', lodgeSource, lodgeViz);
+
+	const visSource = new carto.source.Dataset('visitor_center');
+	const visViz = new carto.Viz(`
+    @v_features: viewportFeatures($name)
+    width: 20
+		color: #b7000f
+		strokeColor: #ffffff
+		strokeWidth: 1
+		symbol: image('https://s3.amazonaws.com/com.cartodb.users-assets.production/maki-icons/embassy-18.svg')
+	`);
+    const visLayer = new carto.Layer('visLayer', visSource, visViz);
+
+	const histSource = new carto.source.Dataset('historical_site');
+	const histViz = new carto.Viz(`
+    @name: $name
+    @website: $website
+		width: 15
+		color: #413c3c
+		strokeColor: #ffffff
+		strokeWidth: 1
+		symbol: image('https://s3.amazonaws.com/com.cartodb.users-assets.production/maki-icons/monument-18.svg')
+	`);
+    const histLayer = new carto.Layer('histLayer', histSource, histViz);
+
+  const wildlifeSource = new carto.source.Dataset('wildlife');
+  const wildlifeViz = new carto.Viz(`
+		width: 4
+		color: opacity (pink, .95)
+		strokeColor: opacity (#ffffff, .85)
+		strokeWidth: 1
+	`);
+    const wildlifeLayer = new carto.Layer('wildlifeLayer', wildlifeSource, wildlifeViz);
+
+  const birdSource = new carto.source.SQL(`SELECT * FROM wildlife WHERE species = 'BIRD'`);
+  const birdViz = new carto.Viz(`
+		width: 4
+		color: opacity (orange, .95)
+		strokeColor: opacity (#ffffff, .85)
+		strokeWidth: 1
+	`);
+
+	const bearSource = new carto.source.SQL(`SELECT * FROM wildlife WHERE species = 'BEAR'`);
+	const bearViz = new carto.Viz(`
+		width: 4
+		color: opacity (red, .8)
+		strokeColor: opacity (#ffffff, .85)
+		strokeWidth: 1
+	`);
+
+	const sealSource = new carto.source.SQL(`SELECT * FROM wildlife WHERE species = 'SEAL'`);
+	const sealViz = new carto.Viz(`
+		width: 4
+		color: opacity (blue, .95)
+		strokeColor: opacity (#ffffff, .85)
+		strokeWidth: 1
+	`);
+
+  const wildlifeNone = new carto.source.SQL(`SELECT * FROM wildlife WHERE species = 'NONE'`);
+	const NoneWildViz = new carto.Viz(`
+		width: 4
+		color: opacity (blue, .95)
+		strokeColor: opacity (#ffffff, .85)
+		strokeWidth: 1
+	`);
+
+
+
+  //add layers to map
+  layer.addTo(map);
+	peakLayer.addTo(map);
+	visLayer.addTo(map);
+	histLayer.addTo(map);
+	wildlifeLayer.addTo(map);
+	wildlifeLayer.on('loaded', hideLoader);
+	lodgeLayer.addTo(map);
+
+
+	//add Mapbox draw tools
+	const draw = new MapboxDraw({
+	displayControlsDefault: false,
+	controls: {
+	polygon: true,
+	point: true,
+	trash: true,
+	}
+	});
+	map.addControl(draw, 'bottom-right');
+
+  map.on('draw.create', updateArea);
+
+  function updateArea(e) {
+    var data = draw.getAll();
+      if (data.features.length > 0) {
+        var species = prompt('Please input type of wildlife sighting:', "");
+              if (species == null || species == "") {
+                txt = alert("User cancelled the prompt.");
+                let ids = e.features.map(f => f.id); console.log(ids)
+                draw.delete(ids);
+              } else {
+                txt2 = alert("Thank you for submitting a wildlife sighting!");
+                // draw.add(data);
+                //var convertedData = encodeURIComponent(JSON.stringify(data)); console.log(data)
+                // var tooltip = new mapboxgl.Popup()
+                // .setLngLat(latlng)
+                // .setHTML('<p>' + data + '</p>')
+                // .addTo(map);
+           }
+         }
+       }
+
+
+  // Define interactivity
+      const lodgeclick = new carto.Interactivity(lodgeLayer);
+      const delay = 100;
+      let clickedFeatureId = null;
+
+
+      lodgeclick.on('featureClick', event => {
+            if (event.features.length) {
+                const feature = event.features[0];
+                clickedFeatureId = feature.id;
+                feature.color.blendTo('opacity(LimeGreen, 0.5)', delay)
+                feature.strokeWidth.blendTo('7', delay);
+                feature.strokeColor.blendTo('opacity(LimeGreen, 0.8)', delay);
+            }
+        });
+
+      lodgeclick.on('featureClickOut', event => {
+            if (event.features.length) {
+                  const feature = event.features[0];
+                  clickedFeatureId = '';
+                  feature.color.reset(delay);
+                  feature.strokeWidth.reset(delay);
+                  feature.strokeColor.reset(delay);
+              }
+        });
+
+        lodgeclick.on('featureClick', updatePopup);
+
+        function updatePopup(event) {
+            if (event.features.length > 0) {
+                const vars = event.features[0].variables; console.log(vars)
+                popup.setHTML(`
+                    <div>
+                        <h3 class ="h3">${vars.name.value}</h3>
+                        <a href="${vars.website.value}" target="blank" class="description open-sans">${vars.website.value}</a>
+                    </div>
+                `);
+                popup.setLngLat([event.coordinates.lng, event.coordinates.lat]);
+                if (!popup.isOpen()) {
+                    popup.addTo(map);
+                }
+              } else {
+                  popup.remove();
+              }
+            }
+
+        const visclick = new carto.Interactivity(visLayer);
+
+        visclick.on('featureHover', updatevisPop);
+
+        function updatevisPop(event) {
+            if (event.features.length > 0) {
+                const vars = event.features[0].variables; console.log(vars)
+                popup.setHTML(`
+                    <div>
+                        <h3 class ="h3">Glacier Bay Visitor Center</h3>
+                        <p class="description open-sans">Located near the head of the public-use dock in Bartlett Cove,
+                        </br>
+                        10 miles from Gustavus. The "VIS" provides trip planning information,
+                        </br>
+                        boating and camping permits, and offers boater/camper orientation
+                        </br>
+                        sessions for visitors heading into the wild backcountry of Glacier Bay.
+                        </br>
+                        Stop by and meet a park ranger.
+                        </br>
+                        <h3 class ="h3">Closed until 2021 summer season.</h3>
+                    </div>
+                `);
+                popup.setLngLat([event.coordinates.lng, event.coordinates.lat]);
+                if (!popup.isOpen()) {
+                    popup.addTo(map);
+                }
+            // } else {
+            //     popup.remove();
+            }
+       }
+
+       const histclick = new carto.Interactivity(histLayer);
+
+       histclick.on('featureHover', updatehistPop);
+
+       function updatehistPop(event) {
+           if (event.features.length > 0) {
+               const vars = event.features[0].variables; console.log(vars)
+               popup.setHTML(`
+                   <div>
+                       <h3 class ="h3">C-47 Crash Wreckage 1957</h3>
+                       <img src='https://beartrackinn.files.wordpress.com/2017/07/img_0335_edited-1.jpg' position="center" style="width: 250px"/>
+                   </div>
+               `);
+               popup.setLngLat([event.coordinates.lng, event.coordinates.lat]);
+               if (!popup.isOpen()) {
+                   popup.addTo(map);
+               }
+           // } else {
+           //     popup.remove();
+           }
+      }
+
+  //interactive wildlife legend
+  function setALLlayer() {
+      wildlifeLayer.update(wildlifeSource, wildlifeViz);
+    }
+  function setNonelayer() {
+      wildlifeLayer.update(wildlifeNone, NoneWildViz);
+    }
+  function setBearlayer() {
+      wildlifeLayer.update(bearSource, bearViz);
+    }
+    function setSeallayer() {
+      wildlifeLayer.update(sealSource, sealViz);
+    }
+    function setBirdlayer() {
+      wildlifeLayer.update(birdSource, birdViz);
+    }
+    function addlayer() {
+      wildlifeLayer.update(wildlifeSource, wildlifeViz)
+    }
+
+
+  //Load peakLayer and define function for mountain histogram
+  peakLayer.on('loaded', () => {
+              document.getElementById('loader').style.opacity = '0';
+          });
+
+          layer.on('updated', drawHistogram);
+
+          function drawHistogram() {
+              var histogramWidget = document.querySelector('as-histogram-widget');
+              const histogram = peakLayer.viz.variables.histogram.value;
+              histogramWidget.disableInteractivity = true;
+              histogramWidget.data = histogram.map(entry => {
+                  return {
+                      start: entry.x[0] / 1,
+                      end: entry.x[1] / 1,
+                      value: entry.y
+                  }
+              });
+          }
+
+  // Define interactivity for glacier hover
+    const interactivity = new carto.Interactivity(layer);
+    interactivity.on('featureHover', updateGlac);
+
+  //Define function for identify glacier tool
+  function updateGlac(event) {
+      let content = '';
+      for (let feature of event.features) {
+        content += `
+          <div class="container">
+            <h3 class="h3">${feature.variables.glac_name.value}</h3>
+            <p class="open-sans">Latitude: ${event.coordinates.lat.toFixed(4)}</p>
+            <p class="open-sans">Longitude: ${event.coordinates.lng.toFixed(4)}</p>
+          </div>
+        `;
+      }
+      document.getElementById('content').innerHTML = content;
+    }
+    function hideLoader() {
+      document.getElementById('loader').style.opacity = '0';
+   }
+
+  </script>
+</as-responsive-content>
+</body>
+
+</html>
